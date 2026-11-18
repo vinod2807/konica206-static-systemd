@@ -1,0 +1,39 @@
+[Unit]
+Description=Konica bizhub 206 printer application
+After=network.target
+
+[Service]
+ExecStart=/var/lib/konica206/bin/konica206-native-server
+User=konica
+Group=konica
+StateDirectory=konica206
+WorkingDirectory=/var/lib/konica206
+
+# Filesystem
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ReadWritePaths=/var/lib/konica206
+
+# Devices: USB only
+DevicePolicy=closed
+DeviceAllow=char-usb_device rw
+
+# Network: localhost only
+IPAddressDeny=any
+IPAddressAllow=localhost
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+# General lockdown
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+SystemCallFilter=@system-service
+
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

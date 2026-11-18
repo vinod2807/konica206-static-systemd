@@ -1,0 +1,2 @@
+# VID/PID come from config/pins.env; confirm with lsusb.
+SUBSYSTEM=="usb", ATTR{idVendor}=="132b", ATTR{idProduct}=="232b", GROUP="konica", MODE="0660"

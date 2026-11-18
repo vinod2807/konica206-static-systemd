@@ -1,0 +1,33 @@
+# Experimental: mirrors the static build in scripts/build-static.sh.
+# Manual dispatch only; artifacts are uploaded even on failure for debugging.
+name: static build (experimental)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out
+        uses: actions/checkout@v4
+
+      - name: Determine Wolfi image
+        id: wolfi
+        run: |
+          image=$(sed -n 's/^WOLFI_IMAGE=//p' config/pins.env)
+          echo "image=$image" >> "$GITHUB_OUTPUT"
+
+      - name: Build in Wolfi container
+        run: |
+          docker run --rm -v "$PWD":/work -w /work \
+            "${{ steps.wolfi.outputs.image }}" \
+            sh -c 'sh scripts/build-static.sh'
+
+      - name: Upload dist/
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: konica206-static-dist
+          path: dist/
+          if-no-files-found: warn
