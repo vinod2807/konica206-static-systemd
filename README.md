@@ -1,6 +1,6 @@
 # konica206-static-systemd
 
-Run the Konica bizhub 206 PAPPL printer application as **one static binary under a hardened systemd unit** — no rootfs, no container, no nspawn/Podman at runtime.
+Run the Konica bizhub 206 PAPPL printer application as **static binaries under a hardened systemd unit** — no rootfs, no container, no nspawn/Podman at runtime. The server and the Konica raster filter are both statically linked.
 
 The build runs in a **Wolfi** container with `apk`, but Wolfi is only the build environment: the output is a statically linked binary copied to the target host.
 
@@ -17,7 +17,7 @@ Inputs are pinned, not forked or vendored:
 ### Wolfi-specific changes from the original Alpine plan
 
 - **glibc, not musl.** Wolfi has no musl packages, so the result is a static **glibc** executable. The original "static musl" wording no longer applies.
-- **TLS is included.** PAPPL 1.3.1 hard-requires TLS (`configure` errors out if none is found), so `--with-tls=no` is not possible. OpenSSL is linked statically from Wolfi's `.a`. DNS-SD/avahi is still disabled with `--with-dnssd=no`, and the service remains bound to `127.0.0.1` only. Do not expose port 8001 to the LAN.
+- **TLS is included.** PAPPL 1.3.1 hard-requires TLS (`configure` errors out if none is found), so `--with-tls=no` is not possible. OpenSSL is linked statically from Wolfi's `.a`. DNS-SD/avahi is still disabled with `--with-dnssd=no`, and the service remains bound to `127.0.0.1` only. Do not expose the configured port (8003 on the live host) to the LAN.
 - **CUPS is built from source.** Wolfi's `cups-dev` has no static `libcups.a`. The build script builds CUPS 2.4.20 with `--enable-static --disable-shared --with-dnssd=no` and applies a two-field struct fix for an upstream 2.4.20 typo in `cups/dest.c`.
 - **Static NSS warnings are expected** for `getpwnam_r`/`getpwuid_r`/`getservbyname` on glibc; they are harmless for localhost-only use.
 
@@ -48,21 +48,28 @@ On a Fedora bootc host, `/etc` and `/var` are persistent and writable, so a live
 3. **Install** (on the target host; on bootc this touches only `/etc` and `/var`):
 
    ```sh
-   sudo sh scripts/install.sh
-   sudo systemctl enable --now konica206
-   sudo systemctl status konica206
+   sudo sh scripts/install.sh --check   # prerequisites, no changes
+   sudo sh scripts/install.sh           # installs files and queue, does not start
+   sudo env KONICA_START=1 sh scripts/install.sh   # also enable/start
    ```
 
-   Warning: stop and disable any existing printer service already listening on `127.0.0.1:8001` first, otherwise `konica206.service` cannot bind.
+   The installer detects Fedora/Debian/Ubuntu systemd hosts and Alpine/OpenRC
+   hosts, creates the `konica` user, installs the binaries/PPD/udev rule,
+   generates the service definition and creates the CUPS queue. Defaults are
+   port `8003` and queue `konica206-static`; see
+   [docs/portability.md](docs/portability.md) for all options. It does not stop
+   or remove any existing printer stack — if another service owns the chosen
+   port, change `KONICA_PORT`.
 
 4. **Verify** with `journalctl -u konica206 -b`, `ipptool`, `systemd-analyze security konica206`, and the physical print tests in [docs/acceptance.md](docs/acceptance.md).
 
 To remove everything again: `sudo sh scripts/uninstall.sh`.
 
-Configure the print queue explicitly by URI — there is no DNS-SD advertising:
+The installer configures the queue by URI — there is no DNS-SD advertising.
+To do it manually:
 
 ```sh
-lpadmin -p KONICA206 -E -v ipp://127.0.0.1:8001/ipp/print/konica206 -m everywhere
+lpadmin -p konica206-static -E -v ipp://127.0.0.1:8003/ipp/print/KONICA206 -m everywhere
 ```
 
 Confirm the actual printer path with `ipptool` before using that command.
@@ -72,12 +79,21 @@ Confirm the actual printer path with `ipptool` before using that command.
 - **USB permissions** — confirm VID/PID with `lsusb`, check `config/udev/70-konica206.rules`, then `udevadm control --reload && udevadm trigger`.
 - **`/sys` access** — libusb enumerates through `/sys`. `ProtectSystem=strict` leaves it readable; if enumeration fails, check `journalctl -u konica206`.
 - **seccomp** — if `SystemCallFilter=@system-service` blocks something libusb needs, loosen it in `config/systemd/konica206.service` and record why.
-- **Port conflicts** — the server binds `127.0.0.1:8001` (`IPP_PORT` in `config/pins.env`). Only one printer service can own that port.
+- **Port conflicts** — the installer binds `127.0.0.1:8003` by default (`KONICA_PORT`; `config/pins.env` still records 8001 for the legacy stack). Only one printer service can own a port.
 - **TLS / avahi checks** — `strings dist/konica206-native-server | grep -Ei 'gnutls_|avahi_'` must print nothing. OpenSSL strings are expected.
 - **Static link errors** — archive order matters: `libpappl` before `libcups`, and `-lm` after `-lcups`. The build script handles both.
 - **getaddrinfo / NSS warnings** — expected with static glibc and harmless for localhost-only use.
 
-## 5. Relationship to other repos
+## 5. Other Linux distributions
+
+The static binaries were smoke-tested on both glibc (Fedora) and musl (Alpine)
+hosts. The installer adapts user creation, service definition (systemd or
+OpenRC), SELinux substitution and CUPS queue setup; Ghostscript is the one
+required external program for the builtin renderer. See
+[docs/portability.md](docs/portability.md) for the prerequisites, test matrix
+and environment overrides.
+
+## 6. Relationship to other repos
 
 - `konica206-alpine-nspawn` — the rootfs/nspawn approach this repo is an alternative to.
 - `konica206-native-alpine` — the upstream PAPPL app; pinned in `config/pins.env`, never forked here.
