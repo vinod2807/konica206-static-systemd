@@ -23,7 +23,9 @@ Inputs are pinned, not forked or vendored:
 
 ## 2. Status
 
-The static build is verified in a clean Wolfi container: both `dist/konica206-native-server` and `dist/konica-native` are reported as statically linked with no ELF interpreter. The service and physical print acceptance tests are **not done** — see [docs/acceptance.md](docs/acceptance.md). Do not rely on this until every item there is ticked.
+The static build is verified in a clean Wolfi container: both `dist/konica206-native-server` and `dist/konica-native` are reported as statically linked with no ELF interpreter. Service and physical-print acceptance are tracked in [docs/acceptance.md](docs/acceptance.md); those boxes describe the default port-8001 install.
+
+The live 8003 deployment has since printed A4 simplex and duplex pages through the static binary. The app now advertises the bizhub 206's real 12 pt imageable area instead of full-bleed media, so `-m everywhere` yields plain `A4`/`Letter` names and PDF content is inset before it reaches the engine. If you upgrade an older install, see the state-migration note in [docs/acceptance.md](docs/acceptance.md).
 
 On a Fedora bootc host, `/etc` and `/var` are persistent and writable, so a live install survives `bootc upgrade`. Baking into the bootc image is optional and is a separate decision.
 

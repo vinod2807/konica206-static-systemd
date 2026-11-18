@@ -31,3 +31,18 @@ deployment.
 - [ ] large job
 
 A green build is not a printed page.
+
+## Upgrading from the full-bleed build
+
+PAPPL validates saved `media-ready` entries against the margins the driver
+advertises. A state file written while the app reported zero margins makes the
+new build log `Unsupported media-ready.media-*-margin` at startup and drop all
+media support. With the service stopped:
+
+1. Back up `/var/lib/konica206/.config/konica206-native-server.state`.
+2. Delete its `media-col-default` and `media-col-ready[0-9]*` lines.
+3. Keep the file owned by `konica:konica` (`restorecon` it if you copy it).
+4. Start the service; the driver supplies its own ready media again.
+
+The CUPS queue's driverless PPD must also be refreshed (`lpadmin -p QUEUE -m
+everywhere`) so it stops advertising `A4.Borderless`.
